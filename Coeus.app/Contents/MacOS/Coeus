@@ -1,0 +1,139 @@
+#!/bin/bash
+
+# Stephen Burke - 02.28.2023 - https://github.com/se7enack/ai-computing-assistant
+jsonretured=/tmp/.coeus
+apifile=$HOME/.coeus
+PATH=$PATH:~/opt/bin:/usr/local/bin:/bin:/usr/bin:/opt/homebrew/bin
+touch $apifile
+source $apifile
+voice=Daniel
+
+function youneedkeys() {
+  echo "You haven't got an API key yet. Opening a browser to get one." | say -v ${voice}
+  open https://platform.openai.com/account/api-keys
+  title="Enter Your API Key"
+  key="$(promptme)"
+  if [ -z "$key" ]; then
+    echo "No key entered" | say -v ${voice}
+    exit
+  else
+    echo "export OPENAI_API_KEY=$key" >> $apifile
+    source $apifile
+  fi 
+}
+
+function promptme() {
+  osascript <<EOT
+    tell app "System Events"
+      text returned of (display dialog "$1" default answer "$2" buttons {"OK"} default button 1 with title "${title}")
+    end tell
+EOT
+}
+
+function bad() {
+  osascript <<EOT
+    tell app "System Events"
+      display dialog "$1" buttons {"OK"} default button 1 with icon caution with title "$(basename $0)"
+      return  -- Suppress result
+    end tell
+EOT
+}
+
+function dockit() {
+  defaults write com.apple.dock persistent-apps -array-add '<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>/Applications/Coeus.app</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>'
+  killall Dock
+  touch $jsonretured
+}
+
+function getit() {
+  image=$HOME/Downloads/${question// /-}.png
+  if command -v wget &> /dev/null
+  then
+    wget -O ${image} ${url} && open ${image}
+  else
+    curl ${url} --output ${image} && open ${image}
+  fi
+  start&exit
+}
+
+function start() {
+  choice=$(/usr/bin/osascript<<END
+  tell application "System Events"
+  activate
+  set theAnswer to button returned of (display dialog "AI Generated Search Type" buttons {"Information", "Image", "Exit"})
+  end tell
+  return theAnswer
+  echo $theAnswer
+  END)
+  
+  if [[ "$choice" == "Exit" ]]; then
+    exit
+  fi
+
+  echo $choice
+  title="Coeus: $choice Search"
+  question="$(promptme)"
+  question=$(echo $question | tr -d "'" | tr -d '"')
+  [ -z "$question" ] && echo "Really? You've got nothing?" | say -v ${voice}&&exit
+
+
+  if [[ "$choice" == "Image" ]]; then
+    json="'{\"prompt\": \"${question}\",\"n\": 1,\"size\": \"1024x1024\"}'"
+    x=$(echo "curl -s https://api.openai.com/v1/images/generations -H 'Content-Type: application/json' -H 'Authorization: Bearer $OPENAI_API_KEY' -d ${json}")
+    bash -c "$x" > $jsonretured  
+    if command -v jq &> /dev/null
+    then
+      cat $jsonretured | grep '"error"' > /dev/null
+      if [ "$?" -ne 0 ]; then
+        url=$(cat ${jsonretured} | jq -r '.data[].url')
+        getit
+      else
+        badness=$(cat $jsonretured | jq -r .error.message)
+        bad "${badness}"
+        exit
+      fi
+    else
+      cat $jsonretured | grep '"error"' > /dev/null
+      if [ "$?" -ne 0 ]; then
+        url=$(cat ${jsonretured} | awk -F '"url":' '{print $2}' | tr -d '"')
+        getit
+      else
+        badness=$(cat ${jsonretured} | awk -F '"message":' '{print $2}' | tr -d '"' | rev | cut -c2- | rev)
+        bad "${badness}"
+        exit
+      fi
+    fi
+  else
+    json="'{\"model\": \"text-davinci-003\",\"prompt\": \"${question}:\",\"temperature\": 0.9,\"max_tokens\": 3000,\"top_p\": 1,\"frequency_penalty\": 0.0,\"presence_penalty\": 0.6,\"stop\": [\" Human:\", \" AI:\"]}'"
+    x=$(echo "curl -s https://api.openai.com/v1/completions -H 'Content-Type: application/json' -H 'Authorization: Bearer $OPENAI_API_KEY' -d ${json}")
+    bash -c "$x" > $jsonretured
+
+    if command -v jq &> /dev/null
+    then
+        msg=$(cat $jsonretured | jq -r '.choices[].text')
+    else
+        msg=$(cat $jsonretured | awk -F '"text":' '{print $2}' | awk -F 'index' '{print $1}' | rev | cut -c3- | rev | xargs printf)
+    fi
+    msg2=$(echo "$msg" | sed "s/['\"]//g")
+    echo "$msg" | say -v ${voice}&
+    echo "tell application \"System Events\"
+    activate
+    display dialog \"$msg2\" buttons {\"OK\"}
+    end tell" | osascript 2>&1
+    start&exit
+  fi
+}
+
+###
+
+if ! [ -f "$jsonretured" ]; then
+  dockit
+fi
+
+if [[ -z "$OPENAI_API_KEY" ]]; then
+  youneedkeys
+fi
+
+###
+
+start
