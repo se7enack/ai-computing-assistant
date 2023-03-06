@@ -4,9 +4,44 @@
 jsonretured=/tmp/.coeus
 apifile=$HOME/.coeus
 PATH=$PATH:~/opt/bin:/usr/local/bin:/bin:/usr/bin:/opt/homebrew/bin
+VDIR=/System/Library/SpeechBase/Voices/
+VTMP=/tmp/.voices
 touch $apifile
 source $apifile
-voice=Daniel
+
+
+function grabvoices() {
+  cd $VDIR
+  VOICES=$(ls $VDIR | grep SpeechVoice)
+  rm $VTMP 2> /dev/null
+  touch $VTMP
+  for VOICE in $VOICES 
+  do
+      cd $VOICE
+      bit=$(plutil -extract VoiceAttributes.VoiceShowInFullListOnly raw -o - Contents/Info.plist)
+
+      if ! [[ $bit = true ]]; then 
+          plutil -extract VoiceAttributes.VoiceLocaleIdentifier raw -o - Contents/Info.plist | grep en_ > /dev/null
+          if [ "$?" -eq 0 ];then
+              name=$(echo -n $VOICE | sed s/"Compact"// | awk -F '.' '{print $1}')
+              folder=$(echo $VOICE | awk -F '.' '{print $1}')
+              echo "$name $folder $bit" >> $VTMP
+          fi
+
+          plutil -extract VoiceAttributes.VoiceLocaleIdentifier raw -o - Contents/Info.plist > /dev/null
+          if [ "$?" -ne 0 ];then
+              name=$(echo -n $VOICE  | sed s/"Compact"// | awk -F '.' '{print $1}')
+              folder=$(echo $VOICE | awk -F '.' '{print $1}')
+              echo "$name $folder 0" >> $VTMP
+          fi
+      fi
+      cd $VDIR
+  done
+  available=$(cat $VTMP | awk 'BEGIN {FS=" ";} {printf "'000'%s'\000","' ", $1}' | rev | cut -c3- | rev | sed 's/000/\"/g')
+  echo "choose from list {$available}"
+  choose
+  voice=$(cat $VTMP | grep $choice | awk '{print $2}')
+}
 
 function youneedkeys() {
   echo "You haven't got an API key yet. Opening a browser to get one." | say -v ${voice}
@@ -56,6 +91,15 @@ function getit() {
   start&exit
 }
 
+function choose() {
+  choice=$(/usr/bin/osascript<<EOF
+  tell application "System Events"
+  activate
+  choose from list {$available}
+  end tell
+EOF)
+}
+
 function start() {
   choice=$(/usr/bin/osascript<<END
   tell application "System Events"
@@ -75,7 +119,6 @@ function start() {
   question="$(promptme)"
   question=$(echo $question | tr -d "'" | tr -d '"')
   [ -z "$question" ] && echo "Really? You've got nothing?" | say -v ${voice}&&exit
-
 
   if [[ "$choice" == "Image" ]]; then
     json="'{\"prompt\": \"${question}\",\"n\": 1,\"size\": \"1024x1024\"}'"
@@ -104,6 +147,7 @@ function start() {
       fi
     fi
   else
+    [ -z "$voice" ] && grabvoices
     json="'{\"model\": \"text-davinci-003\",\"prompt\": \"${question}:\",\"temperature\": 0.9,\"max_tokens\": 3000,\"top_p\": 1,\"frequency_penalty\": 0.0,\"presence_penalty\": 0.6,\"stop\": [\" Human:\", \" AI:\"]}'"
     x=$(echo "curl -s https://api.openai.com/v1/completions -H 'Content-Type: application/json' -H 'Authorization: Bearer $OPENAI_API_KEY' -d ${json}")
     bash -c "$x" > $jsonretured
