@@ -15,7 +15,6 @@ if [[ "$x" -gt "$y" ]]; then
 else
   VDIR=/System/Library/Speech/Voices/
 fi
-echo $VDIR
 
 function grabvoices() {
   cd $VDIR
@@ -24,24 +23,23 @@ function grabvoices() {
   touch $VTMP
   for VOICE in $VOICES 
   do
-      cd $VOICE
-      bit=$(plutil -convert xml1 -o - Contents/Info.plist | grep -a1 VoiceShowInFullListOnly | grep -E 'false' > /dev/null)
-
-      if [[ $? -eq "0" ]]; then 
-          plutil -convert xml1 -o - Contents/Info.plist | grep -a1 VoiceLocaleIdentifier | grep string | grep "en_" > /dev/null
-          if [ "$?" -eq 0 ];then
-              name=$(echo -n $VOICE | sed s/"Compact"// | awk -F '.' '{print $1}')
-              folder=$(echo $VOICE | awk -F '.' '{print $1}')
-              echo "$name $folder $bit" >> $VTMP
-          fi
-          k=$(plutil -convert xml1 -o - Contents/Info.plist | grep -a1 VoiceLocaleIdentifier)
-          if [ "$?" -ne 0 ];then
-              name=$(echo -n $VOICE  | sed s/"Compact"// | awk -F '.' '{print $1}')
-              folder=$(echo $VOICE | awk -F '.' '{print $1}')
-              echo "$name $folder $k" >> $VTMP
-          fi
+    cd $VOICE
+    bit=$(plutil -convert xml1 -o - Contents/Info.plist | grep -a1 VoiceShowInFullListOnly | grep -E 'false' > /dev/null)
+    if [[ $? -eq "0" ]]; then 
+      plutil -convert xml1 -o - Contents/Info.plist | grep -a1 VoiceLocaleIdentifier | grep string | grep "en_" > /dev/null
+      if [ "$?" -eq 0 ];then
+        name=$(echo -n $VOICE | sed s/"Compact"// | awk -F '.' '{print $1}')
+        folder=$(echo $VOICE | awk -F '.' '{print $1}')
+        echo "$name $folder $bit" >> $VTMP
       fi
-      cd $VDIR
+      k=$(plutil -convert xml1 -o - Contents/Info.plist | grep -a1 VoiceLocaleIdentifier)
+      if [ "$?" -ne 0 ];then
+        name=$(echo -n $VOICE  | sed s/"Compact"// | awk -F '.' '{print $1}')
+        folder=$(echo $VOICE | awk -F '.' '{print $1}')
+        echo "$name $folder $k" >> $VTMP
+      fi
+    fi
+    cd $VDIR
   done
   available=$(cat $VTMP | awk 'BEGIN {FS=" ";} {printf "'000'%s'000","' ", $1}' | rev | cut -c3- | rev | sed 's/000/\"/g')
   echo "choose from list {$available}"
@@ -157,7 +155,6 @@ function start() {
     json="'{\"model\": \"text-davinci-003\",\"prompt\": \"${question}:\",\"temperature\": 0.9,\"max_tokens\": 3000,\"top_p\": 1,\"frequency_penalty\": 0.0,\"presence_penalty\": 0.6,\"stop\": [\" Human:\", \" AI:\"]}'"
     x=$(echo "curl -s https://api.openai.com/v1/completions -H 'Content-Type: application/json' -H 'Authorization: Bearer $OPENAI_API_KEY' -d ${json}")
     bash -c "$x" > $jsonretured
-
     if command -v jq &> /dev/null
     then
         msg=$(cat $jsonretured | jq -r '.choices[].text')
@@ -175,15 +172,12 @@ function start() {
 }
 
 ###
-
 if ! [ -f "$jsonretured" ]; then
   dockit
 fi
-
 if [[ -z "$OPENAI_API_KEY" ]]; then
   youneedkeys
 fi
-
 ###
 
 start
