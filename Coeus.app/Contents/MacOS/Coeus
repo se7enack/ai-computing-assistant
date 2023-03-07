@@ -49,12 +49,12 @@ function grabvoices() {
 }
 
 function youneedkeys() {
-  echo "You haven't got an API key yet. Opening a browser to get one." | say -v ${voice}
+  echo "You haven't got an API key yet. Opening a browser to get one." | say
   open https://platform.openai.com/account/api-keys
   title="Enter Your API Key"
   key="$(promptme)"
   if [ -z "$key" ]; then
-    echo "No key entered" | say -v ${voice}
+    echo "No key entered" | say
     exit
   else
     echo "export OPENAI_API_KEY=$key" >> $apifile
@@ -105,6 +105,53 @@ function choose() {
 EOF)
 }
 
+picture() {
+  json="'{\"prompt\": \"${question}\",\"n\": 1,\"size\": \"1024x1024\"}'"
+  x=$(echo "curl -s https://api.openai.com/v1/images/generations -H 'Content-Type: application/json' -H 'Authorization: Bearer $OPENAI_API_KEY' -d ${json}")
+  bash -c "$x" > $jsonretured  
+  if command -v jq &> /dev/null
+  then
+    cat $jsonretured | grep '"error"' > /dev/null
+    if [ "$?" -ne 0 ]; then
+      url=$(cat ${jsonretured} | jq -r '.data[].url')
+      getit
+    else
+      badness=$(cat $jsonretured | jq -r .error.message)
+      bad "${badness}"
+      exit
+    fi
+  else
+    cat $jsonretured | grep '"error"' > /dev/null
+    if [ "$?" -ne 0 ]; then
+      url=$(cat ${jsonretured} | awk -F '"url":' '{print $2}' | tr -d '"')
+      getit
+    else
+      badness=$(cat ${jsonretured} | awk -F '"message":' '{print $2}' | tr -d '"' | rev | cut -c2- | rev)
+      bad "${badness}"
+      exit
+    fi
+  fi
+}
+
+askquestion() {
+  json="'{\"model\": \"text-davinci-003\",\"prompt\": \"${question}:\",\"temperature\": 0.9,\"max_tokens\": 3000,\"top_p\": 1,\"frequency_penalty\": 0.0,\"presence_penalty\": 0.6,\"stop\": [\" Human:\", \" AI:\"]}'"
+  x=$(echo "curl -s https://api.openai.com/v1/completions -H 'Content-Type: application/json' -H 'Authorization: Bearer $OPENAI_API_KEY' -d ${json}")
+  bash -c "$x" > $jsonretured
+  if command -v jq &> /dev/null
+  then
+      msg=$(cat $jsonretured | jq -r '.choices[].text')
+  else
+      msg=$(cat $jsonretured | awk -F '"text":' '{print $2}' | awk -F 'index' '{print $1}' | rev | cut -c3- | rev | xargs printf)
+  fi
+  msg2=$(echo "$msg" | sed "s/['\"]//g")
+  echo "$msg" | say -v ${voice}&
+  echo "tell application \"System Events\"
+  activate
+  display dialog \"$msg2\" buttons {\"OK\"}
+  end tell" | osascript 2>&1
+  start&exit
+}
+
 function start() {
   if ! [ -f "$jsonretured" ]; then
     dockit
@@ -126,56 +173,21 @@ function start() {
     exit
   fi
 
-  echo $choice
-  title="Coeus: $choice Search"
-  question="$(promptme)"
   question=$(echo $question | tr -d "'" | tr -d '"')
-  [ -z "$question" ] && echo "Really? You've got nothing?" | say -v ${voice}&&exit
 
   if [[ "$choice" == "Image" ]]; then
-    json="'{\"prompt\": \"${question}\",\"n\": 1,\"size\": \"1024x1024\"}'"
-    x=$(echo "curl -s https://api.openai.com/v1/images/generations -H 'Content-Type: application/json' -H 'Authorization: Bearer $OPENAI_API_KEY' -d ${json}")
-    bash -c "$x" > $jsonretured  
-    if command -v jq &> /dev/null
-    then
-      cat $jsonretured | grep '"error"' > /dev/null
-      if [ "$?" -ne 0 ]; then
-        url=$(cat ${jsonretured} | jq -r '.data[].url')
-        getit
-      else
-        badness=$(cat $jsonretured | jq -r .error.message)
-        bad "${badness}"
-        exit
-      fi
-    else
-      cat $jsonretured | grep '"error"' > /dev/null
-      if [ "$?" -ne 0 ]; then
-        url=$(cat ${jsonretured} | awk -F '"url":' '{print $2}' | tr -d '"')
-        getit
-      else
-        badness=$(cat ${jsonretured} | awk -F '"message":' '{print $2}' | tr -d '"' | rev | cut -c2- | rev)
-        bad "${badness}"
-        exit
-      fi
-    fi
+    echo $choice
+    title="Coeus: $choice Search"
+    question="$(promptme)"    
+    [ -z "$question" ] && say "Really, you've got nothing?" && exit
+    picture
   else
     [ -z "$voice" ] && grabvoices
-    json="'{\"model\": \"text-davinci-003\",\"prompt\": \"${question}:\",\"temperature\": 0.9,\"max_tokens\": 3000,\"top_p\": 1,\"frequency_penalty\": 0.0,\"presence_penalty\": 0.6,\"stop\": [\" Human:\", \" AI:\"]}'"
-    x=$(echo "curl -s https://api.openai.com/v1/completions -H 'Content-Type: application/json' -H 'Authorization: Bearer $OPENAI_API_KEY' -d ${json}")
-    bash -c "$x" > $jsonretured
-    if command -v jq &> /dev/null
-    then
-        msg=$(cat $jsonretured | jq -r '.choices[].text')
-    else
-        msg=$(cat $jsonretured | awk -F '"text":' '{print $2}' | awk -F 'index' '{print $1}' | rev | cut -c3- | rev | xargs printf)
-    fi
-    msg2=$(echo "$msg" | sed "s/['\"]//g")
-    echo "$msg" | say -v ${voice}&
-    echo "tell application \"System Events\"
-    activate
-    display dialog \"$msg2\" buttons {\"OK\"}
-    end tell" | osascript 2>&1
-    start&exit
+    echo $choice
+    title="Coeus: $choice Search"
+    question="$(promptme)"    
+    [ -z "$question" ] && say -v $voice "Really, you've got nothing?" && exit
+    askquestion
   fi
 }
 
