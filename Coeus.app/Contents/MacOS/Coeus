@@ -4,11 +4,18 @@
 jsonretured=/tmp/.coeus
 apifile=$HOME/.coeus
 PATH=$PATH:~/opt/bin:/usr/local/bin:/bin:/usr/bin:/opt/homebrew/bin
-VDIR=/System/Library/SpeechBase/Voices/
 VTMP=/tmp/.voices
 touch $apifile
 source $apifile
 
+x=$(ls /System/Library/SpeechBase/Voices | wc -l)
+y=$(ls /System/Library/Speech/Voices | wc -l )
+if [[ "$x" -gt "$y" ]]; then
+  VDIR=/System/Library/SpeechBase/Voices/
+else
+  VDIR=/System/Library/Speech/Voices/
+fi
+echo $VDIR
 
 function grabvoices() {
   cd $VDIR
@@ -18,26 +25,25 @@ function grabvoices() {
   for VOICE in $VOICES 
   do
       cd $VOICE
-      bit=$(plutil -extract VoiceAttributes.VoiceShowInFullListOnly raw -o - Contents/Info.plist)
+      bit=$(plutil -convert xml1 -o - Contents/Info.plist | grep -a1 VoiceShowInFullListOnly | grep -E 'false' > /dev/null)
 
-      if ! [[ $bit = true ]]; then 
-          plutil -extract VoiceAttributes.VoiceLocaleIdentifier raw -o - Contents/Info.plist | grep en_ > /dev/null
+      if [[ $? -eq "0" ]]; then 
+          plutil -convert xml1 -o - Contents/Info.plist | grep -a1 VoiceLocaleIdentifier | grep string | grep "en_" > /dev/null
           if [ "$?" -eq 0 ];then
               name=$(echo -n $VOICE | sed s/"Compact"// | awk -F '.' '{print $1}')
               folder=$(echo $VOICE | awk -F '.' '{print $1}')
               echo "$name $folder $bit" >> $VTMP
           fi
-
-          plutil -extract VoiceAttributes.VoiceLocaleIdentifier raw -o - Contents/Info.plist > /dev/null
+          k=$(plutil -convert xml1 -o - Contents/Info.plist | grep -a1 VoiceLocaleIdentifier)
           if [ "$?" -ne 0 ];then
               name=$(echo -n $VOICE  | sed s/"Compact"// | awk -F '.' '{print $1}')
               folder=$(echo $VOICE | awk -F '.' '{print $1}')
-              echo "$name $folder 0" >> $VTMP
+              echo "$name $folder $k" >> $VTMP
           fi
       fi
       cd $VDIR
   done
-  available=$(cat $VTMP | awk 'BEGIN {FS=" ";} {printf "'000'%s'\000","' ", $1}' | rev | cut -c3- | rev | sed 's/000/\"/g')
+  available=$(cat $VTMP | awk 'BEGIN {FS=" ";} {printf "'000'%s'000","' ", $1}' | rev | cut -c3- | rev | sed 's/000/\"/g')
   echo "choose from list {$available}"
   choose
   voice=$(cat $VTMP | grep $choice | awk '{print $2}')
