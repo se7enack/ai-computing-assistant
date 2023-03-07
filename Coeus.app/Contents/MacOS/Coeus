@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Stephen Burke - 02.28.2023 - https://github.com/se7enack/ai-computing-assistant
+
 jsonretured=/tmp/.coeus
 apifile=$HOME/.coeus
 PATH=$PATH:~/opt/bin:/usr/local/bin:/bin:/usr/bin:/opt/homebrew/bin
@@ -96,7 +97,7 @@ function getit() {
 }
 
 function choose() {
-  choice=$(/usr/bin/osascript<<EOF
+  choice=$(osascript<<EOF
   tell application "System Events"
   activate
   choose from list {$available}
@@ -105,7 +106,14 @@ EOF)
 }
 
 function start() {
-  choice=$(/usr/bin/osascript<<END
+  if ! [ -f "$jsonretured" ]; then
+    dockit
+  fi
+  if [[ -z "$OPENAI_API_KEY" ]]; then
+    youneedkeys
+  fi
+
+  choice=$(osascript<<END
   tell application "System Events"
   activate
   set theAnswer to button returned of (display dialog "AI Generated Search Type" buttons {"Information", "Image", "Exit"})
@@ -170,14 +178,5 @@ function start() {
     start&exit
   fi
 }
-
-###
-if ! [ -f "$jsonretured" ]; then
-  dockit
-fi
-if [[ -z "$OPENAI_API_KEY" ]]; then
-  youneedkeys
-fi
-###
 
 start
