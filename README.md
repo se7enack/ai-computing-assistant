@@ -54,6 +54,8 @@ https://platform.openai.com/account/api-keys
 
 
 ## Additional Sample Images Created by A.I.
+[Happy Future with AI](https://raw.githubusercontent.com/se7enack/ai-computing-assistant/main/source-code/sample-images/happy_future_with_ai.png)  
+
 [Blind date](https://raw.githubusercontent.com/se7enack/ai-computing-assistant/main/source-code/sample-images/blind-date.png)  
 
 [The lady who watches](https://raw.githubusercontent.com/se7enack/ai-computing-assistant/main/source-code/sample-images/The-lady-who-watches.png)  
