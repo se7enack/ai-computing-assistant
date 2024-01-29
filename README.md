@@ -6,7 +6,7 @@ The Coeus AI Computing Assistant is a MacOS tool that uses the OpenAI API to gen
 
 ### For M1 Chip Macs: Installation from Terminal.app
 ```
-git clone https://github.com/se7enack/ai-computing-assistant.git
+git clone git clone git://github.com/se7enack/ai-computing-assistant.git
 cd ai-computing-assistant/releases
 unzip Coeus-M1-v1.0.0.zip
 sudo cp -r Coeus.app /Applications/.
