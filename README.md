@@ -71,7 +71,4 @@ https://platform.openai.com/account/api-keys
 
 
 <br><br>
-## Source Code
-[Python3 Source Code](https://github.com/se7enack/ai-computing-assistant/tree/main/source-code)
-<br><br>
 
